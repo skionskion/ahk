@@ -1,1 +1,806 @@
-sss
+#Requires AutoHotkey v2.0+
+#SingleInstance Force
+SetWorkingDir A_ScriptDir
+SetTitleMatchMode 2
+
+; --------------- Globals & Constants ---------------
+global hwp, Temp_Var
+GuiWidth := 250
+NormalHeight := 345
+SymbolHeight := 680
+
+; Tab별 기호 목록
+G1 := ["□", "○", "·", "☆", "△", "▽", "※", "◎", "▷", "◁", "◇", "■", "▣", "▦", "●", "★", "▲", "▼", "▶", "◀", "◆", "◈",
+    "【", "】", "☏", "☎", "☞", "☜", "→", "←", "↑", "↓", "↔", "↕", "특수"]
+G2 := ["ℓ", "㎖", "㎘", "㎡", "㎝", "㎠", "㎜", "㎞", "㎢", "㎤", "㎥", "㎣", "㎦", "∑", "√", "∞", "∫", "≠", "℃", "℉", "‰", "㏄",
+    "㎎", "㎏", "㎐", "㏈", "±", "×", "÷", "Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"]
+G3 := ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩", "⑪", "⑫", "⑬", "⑭", "⑮", "㉮", "㉯", "㉰", "㉱", "㉲", "㉳", "㉴",
+    "㉵", "ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ", "㉿", "㈜"]
+
+; GUI 관련 전역 컨트롤 핸들
+global MyGui, MyTab, MyStatus, BtnToggle
+global SymbolButtons := []
+global isSymbolMode := false
+
+; -------------------- GUI 생성 --------------------
+MyGui := Gui("+AlwaysOnTop", "HWP Helper")
+MyGui.SetFont("s10", "맑은 고딕")
+
+; [First Menu Area]
+btnNew := MyGui.Add("Button", "x8 y3 w47 h22", "새문서")
+btnNew.OnEvent("Click", New_Hwp)
+
+BtnToggle := MyGui.Add("Button", "x+5 w37 h22 vBtnToggle", "기호")
+BtnToggle.OnEvent("Click", ToggleSymbol)
+
+ddlUseful := MyGui.Add("DropDownList", "x+5 w60 vUseful Choose4"
+    , ["캡쳐", "매크로", "편집", "유용한"])
+ddlUseful.OnEvent("Change", UpdateUseful)
+
+ddlMyDoc := MyGui.Add("DropDownList", "x+5 w75 vMyDoc Choose12"
+    , ["보고전", "공문작성", "출장복명", "회의결과", "A4_A3변환", "A4보고서", "보고2", "목차", "A3보고서", "HWP열기", "샘플열기", "각종서식"])
+ddlMyDoc.OnEvent("Change", UpdateDoc)
+
+; [Group Box 1]
+gb1 := MyGui.Add("GroupBox", "x8 y+10 w235 h87 c0066CC", "글자모양")
+
+ddlFont := MyGui.Add("DropDownList", "x15 y70 w90 vMyFont Choose11"
+    , ["휴먼명조", "맑은 고딕", "HY헤드라인M", "HY중고딕", "HY견고딕", "바탕", "바탕체", "굴림", "궁서", "한양해서", "글꼴"])
+ddlFont.OnEvent("Change", UpdateFont)
+
+ddlSize := MyGui.Add("DropDownList", "x+10 w50 vMySize Choose11"
+    , ["10", "11", "13", "15", "17", "20", "23", "25", "27", "30", "크기"])
+ddlSize.OnEvent("Change", UpdateSize)
+
+ddlColor := MyGui.Add("DropDownList", "x+10 w60 vMyColor Choose26"
+    , ["검정", "빨강", "주황", "초록", "파랑", "보라", "노랑", "남색", "연빨강", "진빨강", "연주황", "진주황", "연초록", "진초록", "연파랑", "진파랑", "연보라",
+        "진보라", "연노랑", "진노랑", "연남색", "진남색", "회색", "연회색", "흰색", "색상"])
+ddlColor.OnEvent("Change", UpdateColor)
+
+; CheckBox
+MyGui.SetFont("s8", "맑은 고딕")
+chkShade := MyGui.Add("CheckBox", "x150 y53 vIsShade", "음영")
+chkShade.OnEvent("Click", UpdateColor)
+
+chkTable := MyGui.Add("CheckBox", "x+1 vIsTable", "표색")
+chkTable.OnEvent("Click", UpdateColor)
+
+MyGui.SetFont("s10", "맑은 고딕")
+txtBig := MyGui.Add("Text", "x15 y+35", "크게")
+txtBig.OnEvent("Click", TXT_SizeUp)
+
+txtSmall := MyGui.Add("Text", "x+4", "작게 |")
+txtSmall.OnEvent("Click", TXT_SizeDown)
+
+txtWidthUp := MyGui.Add("Text", "x+4", "자간+")
+txtWidthUp.OnEvent("Click", Width_Up)
+
+txtWidthDown := MyGui.Add("Text", "x+4", "자간-")
+txtWidthDown.OnEvent("Click", Width_Down)
+
+txtWidth0 := MyGui.Add("Text", "x+4", "자간0 |")
+txtWidth0.OnEvent("Click", String_Width0)
+
+MyGui.SetFont("Bold")
+txtBold := MyGui.Add("Text", "x+4", "굵게")
+txtBold.OnEvent("Click", TXT_bold)
+MyGui.SetFont("Norm")
+
+; [Group Box 2]
+gb2 := MyGui.Add("GroupBox", "x8 y+15 w235 h50 c005FB3", "문단모양")
+
+txtRowUp := MyGui.Add("Text", "x15 y155", "줄간격+")
+txtRowUp.OnEvent("Click", RowSizeUp)
+
+txtRowDown := MyGui.Add("Text", "x+7", "줄간격-")
+txtRowDown.OnEvent("Click", RowSizeDown)
+
+txtWordSpace := MyGui.Add("Text", "x+8", "어절간격")
+txtWordSpace.OnEvent("Click", line_Word_Spacing)
+
+txtCharSpace := MyGui.Add("Text", "x+8", "문자간격")
+txtCharSpace.OnEvent("Click", line_character_Spacing)
+
+; [Group Box 3]
+gb3 := MyGui.Add("GroupBox", "x8 y+20 w235 h45 c005FB3", "정렬하기")
+
+txtLeft := MyGui.Add("Text", "x15 y215", "좌측")
+txtLeft.OnEvent("Click", Left_alignment)
+
+txtCenter := MyGui.Add("Text", "x+6", "중앙")
+txtCenter.OnEvent("Click", Center_alignment)
+
+txtRight := MyGui.Add("Text", "x+6", "우측 |")
+txtRight.OnEvent("Click", Right_alignment)
+
+txtBoth := MyGui.Add("Text", "x+6", "양쪽 |")
+txtBoth.OnEvent("Click", alignment_both)
+
+txtDistribute := MyGui.Add("Text", "x+5", "배분 |")
+txtDistribute.OnEvent("Click", distribution_alignment)
+
+txtIndent := MyGui.Add("Text", "x+4", "들여써")
+txtIndent.OnEvent("Click", Indent)
+
+; [Group Box 4]
+gb4 := MyGui.Add("GroupBox", "x8 y+15 w235 h50 c003366", "표작성(행/열)")
+MyGui.SetFont("s10", "맑은 고딕")
+
+txtT33 := MyGui.Add("Text", "x15 y270", "3X3 |")
+txtT33.OnEvent("Click", (*) => Table_Make(3, 3))
+
+txtT34 := MyGui.Add("Text", "x+8", "3X4 |")
+txtT34.OnEvent("Click", (*) => Table_Make(3, 4))
+
+txtT35 := MyGui.Add("Text", "x+8", "3X5 |")
+txtT35.OnEvent("Click", (*) => Table_Make(3, 5))
+
+txtT36 := MyGui.Add("Text", "x+8", "3X6 |")
+txtT36.OnEvent("Click", (*) => Table_Make(3, 6))
+
+txtT37 := MyGui.Add("Text", "x+8", "3X7 |")
+txtT37.OnEvent("Click", (*) => Table_Make(3, 7))
+
+txtT11 := MyGui.Add("Text", "x+8", "1X1")
+txtT11.OnEvent("Click", (*) => Table_Make(1, 1))
+
+MyGui.SetFont("s10 cRed", "맑은 고딕")
+MyStatus := MyGui.Add("Text", "x12 y+18 w220 h40 vMyStatus", "※ 새문서 버튼을 클릭하세요.")
+
+; -------------------- 심볼 탭 --------------------
+MyGui.SetFont("s11 cBlack", "맑은 고딕")
+MyTab := MyGui.Add("Tab", "x8 y+1 w235 h320 Hidden", ["도형", "단위", "원문자"])
+CreateSymbolButtons(G1, 1)
+CreateSymbolButtons(G2, 2)
+CreateSymbolButtons(G3, 3)
+
+; GUI 위치
+MyGui.Show(Format("x{} y5 w{} h{}", A_ScreenWidth - GuiWidth - 10, GuiWidth, NormalHeight))
+;~ MyGui.Show(Format("x{} y5 w{} h{}", A_ScreenWidth - GuiWidth - 550, GuiWidth, NormalHeight)) ;Home
+MyGui.OnEvent("Close", GuiClose)
+
+; -------------------- 함수 정의 --------------------
+CreateSymbolButtons(arr, tabIndex) {
+    global MyGui, MyTab, SymbolButtons
+    MyTab.UseTab(tabIndex)
+    for index, symbol in arr {
+        col := Mod(index - 1, 5)
+        row := Floor((index - 1) / 5)
+        x := 20 + (col * 42)
+        y := 380 + (row * 40)
+        btn := MyGui.Add("Button", Format("x{} y{} w37 h30 Hidden", x, y), symbol)
+        btn.OnEvent("Click", SymbolClick)
+        SymbolButtons.Push(btn)
+    }
+    MyTab.UseTab()
+}
+
+ToggleSymbol(*) {
+    global MyGui, MyTab, SymbolButtons, isSymbolMode, BtnToggle, NormalHeight, SymbolHeight
+    isSymbolMode := !isSymbolMode
+    if isSymbolMode {
+        MyTab.Visible := true
+        for btn in SymbolButtons
+            btn.Visible := true
+        BtnToggle.Text := "기본"
+        MyGui.Show("h" SymbolHeight)
+    } else {
+        MyTab.Visible := false
+        for btn in SymbolButtons
+            btn.Visible := false
+        BtnToggle.Text := "기호"
+        MyGui.Show("h" NormalHeight)
+    }
+}
+
+SymbolClick(ctrl, *) {
+    ChosenSymbol := ctrl.Text
+    if (ChosenSymbol = "")
+        return
+    if (ChosenSymbol = "특수") {
+        Symbols := Chr(0x274D) . Chr(0x2022)
+        InsertHWPText(Symbols)
+    } else {
+        InsertHWPText(ChosenSymbol)
+    }
+}
+
+New_Hwp(*) {
+    global MyGui, MyStatus
+    MyGui.Submit(false)
+    MyStatus.Value := "※ 처리중...  되돌리기는 Ctrl+Z"
+    MyStatus.SetFont("s11 cRed")
+    New_Document()
+    HWP_Sample()
+    MyStatus.SetFont("s10 cGreen")
+    MyStatus.Value := "※ 한글 편집이 가능합니다."
+}
+
+UpdateColor(*) {
+    global MyGui, hwp
+    MyGui.Submit(false)
+    MyColor := Trim(MyGui["MyColor"].Text)
+
+    ColorMap := Map(
+        "연빨강", 0xCCCCFF, "빨강", 0x0000FF, "진빨강", 0x000099
+        , "연주황", 0xCCE5FF, "주황", 0x0066FF, "진주황", 0x0044CC
+        , "연노랑", 0xCCFFFF, "노랑", 0x00FFFF, "진노랑", 0x00CCCC
+        , "연초록", 0xCCFFCC, "초록", 0x008000, "진초록", 0x006400
+        , "연파랑", 0xFFCCCC, "파랑", 0xFF0000, "진파랑", 0x990000
+        , "연남색", 0xFFCCDD, "남색", 0x800000, "진남색", 0x400000
+        , "연보라", 0xFFCCFF, "보라", 0x800080, "진보라", 0x4B0082
+        , "검정", 0x000000, "회색", 0x808080, "연회색", 0xEEEEEE
+        , "흰색", 0xFFFFFF)
+
+    if (MyColor = "색상" || !ColorMap.Has(MyColor))
+        return
+
+    IsTable := MyGui["IsTable"].Value
+    IsShade := MyGui["IsShade"].Value
+
+    if IsTable {
+        bset := hwp.HParameterSet.HCellBorderFill
+        hwp.HAction.GetDefault("CellFill", bset.HSet)
+        bset.FillAttr.Type := hwp.BrushType("NullBrush|WinBrush")
+        bset.FillAttr.WinBrushFaceColor := ColorMap[MyColor]
+        bset.FillAttr.WinBrushHatchColor := 0x999999
+        bset.FillAttr.WinBrushFaceStyle := hwp.HatchStyle("None")
+        bset.FillAttr.WindowsBrush := 1
+        hwp.HAction.Execute("CellFill", bset.HSet)
+    } else {
+        hChar := hwp.HParameterSet.HCharShape
+        hwp.HAction.GetDefault("CharShape", hChar.HSet)
+        if IsShade {
+            hChar.ShadeColor := ColorMap[MyColor]
+        } else {
+            hChar.TextColor := ColorMap[MyColor]
+        }
+        hwp.HAction.Execute("CharShape", hChar.HSet)
+    }
+    MyGui["IsShade"].Value := 0
+    MyGui["IsTable"].Value := 0
+    MyGui["MyColor"].Text := "색상"
+}
+
+UpdateUseful(*) {
+    global MyGui
+    MyGui.Submit(false)
+    Useful := MyGui["Useful"].Text
+    if (Useful = "유용한")
+        return
+
+    if (Useful = "캡쳐" || Useful = "매크로") {
+        F_FileName := A_ScriptDir "\UTIL\Clipping_Screen.ahk"
+        Run F_FileName
+    } else {
+        if !WinExist("ahk_exe SciTE.exe")
+            Run "C:\Program Files\AutoHotkey\SciTE\SciTE.exe " A_ScriptName
+        else
+            WinActivate "ahk_exe SciTE.exe"
+    }
+}
+
+UpdateDoc(*) {
+    global MyGui, hwp, Temp_Var
+    MyGui.Submit(false)
+    MyDoc := MyGui["MyDoc"].Text
+
+    if (MyDoc = "각종서식") {
+        return
+    } else if (MyDoc = "HWP열기") {
+        result := MsgBox("HWP 파일을 열겠습니까?`n기존 파일은 제어가 불가능합니다.", "파일 열기", "Y/N Icon? 32")
+        if (result = "No")
+            return
+        Import_Files()
+        return
+    } else if (MyDoc = "샘플열기") {
+        F_FileName := A_ScriptDir "\\DATA\\Form_HWP.hwp"
+        Run F_FileName
+        WinActivate "ahk_exe Hwp.exe"
+        return
+    } else if (MyDoc = "A3보고서") {
+        hwp.HAction.Run("SelectAll")
+        hwp.HAction.Run("Delete")
+        Import_HWP_A3("Form_A3.hwp")
+        hwp.HAction.Run("MovePageBegin")
+        Temp_Var := MyDoc
+        WinActivate "ahk_exe hwp.exe"
+        return
+    }
+
+    hwp.HAction.Run("MovePageBegin")
+    hwp.HAction.Run("SelectAll")
+    hwp.HAction.Run("Delete")
+    Paper_Setting_A4()
+    Temp_Var := MyDoc
+
+    forms := Map()
+    forms["보고전"] := [2, 2]
+    forms["공문작성"] := [4, 4]
+    forms["출장복명"] := [5, 5]
+    forms["회의결과"] := [14, 14]
+    forms["목차"] := [1, 1]
+    forms["A4_A3변환"] := [6, 9]
+    forms["A4보고서"] := [10, 12]
+    forms["보고2"] := [13, 13]
+
+    if forms.Has(MyDoc) {
+        startPage := forms[MyDoc][1]
+        endPage := forms[MyDoc][2]
+        Keep_Page(startPage, endPage)
+    }
+    hwp.HAction.Run("MoveDocBegin")
+    WinActivate "ahk_exe hwp.exe"
+}
+
+UpdateFont(*) {
+    global MyGui, hwp
+    MyGui.Submit(false)
+    MyFont := MyGui["MyFont"].Text
+    if (MyFont = "글꼴")
+        return
+
+    hChar := hwp.HParameterSet.HCharShape
+    fontType := hwp.FontType("TTF")
+    hwp.HAction.GetDefault("CharShape", hChar.HSet)
+
+    hChar.FaceNameHangul := MyFont
+    hChar.FontTypeHangul := fontType
+    hChar.FaceNameLatin := MyFont
+    hChar.FontTypeLatin := fontType
+    hChar.FaceNameUser := MyFont
+    hChar.FontTypeUser := fontType
+    hChar.FaceNameHanja := MyFont
+    hChar.FontTypeHanja := fontType
+    hChar.FaceNameSymbol := MyFont
+    hChar.FontTypeSymbol := fontType
+    hChar.FaceNameOther := MyFont
+    hChar.FontTypeOther := fontType
+
+    hwp.HAction.Execute("CharShape", hChar.HSet)
+}
+
+UpdateSize(*) {
+    global MyGui, hwp
+    MyGui.Submit(false)
+    sz := MyGui["MySize"].Text
+    if (sz = "크기")
+        return
+    hchar1 := hwp.HParameterSet.HCharShape
+    hwp.HAction.GetDefault("CharShape", hchar1.HSet)
+    hchar1.Height := hwp.PointToHwpUnit(sz)
+    hwp.HAction.Execute("CharShape", hchar1.HSet)
+}
+
+TXT_SizeUp(*) => hwp.HAction.Run("CharShapeHeightIncrease")
+TXT_SizeDown(*) => hwp.HAction.Run("CharShapeHeightDecrease")
+TXT_bold(*) => hwp.HAction.Run("CharShapeBold")
+RowSizeUp(*) => hwp.HAction.Run("ParagraphShapeIncreaseLineSpacing")
+RowSizeDown(*) => hwp.HAction.Run("ParagraphShapeDecreaseLineSpacing")
+Width_Up(*) => hwp.HAction.Run("CharShapeSpacingIncrease")
+Width_Down(*) => hwp.HAction.Run("CharShapeSpacingDecrease")
+
+String_Width0(*) {
+    global hwp
+    hset2 := hwp.HParameterSet.HCharShape
+    hwp.HAction.GetDefault("CharShape", hset2.HSet)
+    hset2.SpacingHangul := 0
+    hset2.SpacingUser := 0
+    hwp.HAction.Execute("CharShape", hset2.HSet)
+}
+
+line_Word_Spacing(*) {
+    global hwp
+    hset3 := hwp.HParameterSet.HParaShape
+    hwp.HAction.GetDefault("ParagraphShape", hset3.HSet)
+    hset3.BreakNonLatinWord := 0
+    hwp.HAction.Execute("ParagraphShape", hset3.HSet)
+}
+
+line_character_Spacing(*) {
+    global hwp
+    hset3 := hwp.HParameterSet.HParaShape
+    hwp.HAction.GetDefault("ParagraphShape", hset3.HSet)
+    hset3.BreakNonLatinWord := 1
+    hwp.HAction.Execute("ParagraphShape", hset3.HSet)
+}
+
+SetAlign(type) {
+    global hwp
+    pset := hwp.HParameterSet.HParaShape
+    hwp.HAction.GetDefault("ParagraphShape", pset.HSet)
+    pset.AlignType := hwp.HAlign(type)
+    hwp.HAction.Execute("ParagraphShape", pset.HSet)
+}
+
+Left_alignment(*) => SetAlign("Left")
+Center_alignment(*) => SetAlign("Center")
+Right_alignment(*) => SetAlign("Right")
+
+alignment_both(*) {
+    global hwp
+    hset3 := hwp.HParameterSet.HParaShape
+    hwp.HAction.GetDefault("ParagraphShape", hset3.HSet)
+    hset3.BreakNonLatinWord := 1
+    hset3.AlignType := hwp.HAlign("Justify")
+    hwp.HAction.Execute("ParagraphShape", hset3.HSet)
+}
+
+distribution_alignment(*) {
+    global hwp
+    pset := hwp.HParameterSet.HParaShape
+    hwp.HAction.GetDefault("ParagraphShape", pset.HSet)
+    pset.AlignType := hwp.HAlign("Distribute")
+    hwp.HAction.Execute("ParagraphShape", pset.HSet)
+}
+
+Indent(*) => hwp.HAction.Run("ParagraphShapeIndentAtCaret")
+
+; 불필요한 1x1, 3xN 래퍼는 제거하고 위 텍스트 컨트롤에서 바로 람다로 호출
+
+LEdit(*) {
+    if !WinExist("ahk_exe SciTE.exe")
+        Run "C:\Program Files\AutoHotkey\SciTE\SciTE.exe " A_ScriptName
+    else
+        WinActivate "ahk_exe SciTE.exe"
+}
+
+LReload(*) {
+    if WinExist("ahk_exe SciTE.exe")
+        WinActivate "ahk_exe SciTE.exe"
+    Send "^s"
+    Sleep 100
+    Reload
+}
+
+GuiClose(*) {
+    ExitApp
+}
+
+; 함수 정의 =========================
+
+Insert_File(FileName) {
+    global hwp
+    hset1 := hwp.HParameterSet.HInsertFile
+    hwp.HAction.GetDefault("InsertFile", hset1.HSet)
+    hset1.KeepSection := 0
+    hset1.KeepCharshape := 0
+    hset1.KeepParashape := 0
+    hset1.KeepStyle := 0
+    hset1.FileName := A_ScriptDir "\DATA\" FileName ".hwp"
+    hwp.HAction.Execute("InsertFile", hset1.HSet)
+}
+
+Keep_Page(FromPG, EndPG) {
+    ;~ global MyStatus, hwp, MyGui
+    MyStatus.Value := "★ 처리중...  되돌리기는 Ctrl+Z"
+    MyStatus.SetFont("s11 cRed")
+
+    Insert_File("Form_HWP")
+    hwp.XHwpWindows.Item(0).Visible := false
+    Tset := hwp.HParameterSet.HGotoE
+
+    hwp.HAction.GetDefault("Goto", Tset.HSet)
+    Tset.HSet.SetItem("DialogResult", EndPG + 1)
+    Tset.SetSelectionIndex := 1
+    hwp.HAction.Execute("Goto", Tset.HSet)
+    hwp.HAction.Run("MoveLeft")
+    hwp.HAction.Run("MoveSelTopLevelEnd")
+    hwp.HAction.Run("Delete")
+
+    hwp.HAction.GetDefault("Goto", Tset.HSet)
+    Tset.HSet.SetItem("DialogResult", FromPG)
+    Tset.SetSelectionIndex := 1
+    hwp.HAction.Execute("Goto", Tset.HSet)
+    hwp.HAction.Run("MoveSelTopLevelBegin")
+    if (FromPG != 1)
+        hwp.HAction.Run("Delete")
+
+    hwp.XHwpWindows.Item(0).Visible := true
+
+    WarmMsg := [
+        "작업 준비 완료! 마음껏 편집하세요.", "어제는 역사이고, 내일은 수수께끼, 오늘은 선물입니다.", "작은 일에 정성을 다하세요.", "가장 큰 위험은 아무것도 시도하지 않는 것입니다.",
+        "당신이 헛되이 보낸 오늘은, 어제 죽은 이가 그토록 원했던 내일입니다."
+    ]
+    MsgIndex := Random(1, WarmMsg.Length)
+    SelectedMsg := WarmMsg[MsgIndex]
+    MyStatus.SetFont("s9 cGray")
+    MyStatus.Value := SelectedMsg
+}
+
+InsertHWPText(textValue) {
+    pset := hwp.HParameterSet.HInsertText
+    hwp.HAction.GetDefault("InsertText", pset.HSet)
+    pset.Text := textValue
+    hwp.HAction.Execute("InsertText", pset.HSet)
+}
+
+hwp_Enter(num := 1) {
+    loop num
+        hwp.HAction.Run("BreakPara")
+}
+
+InputText(text) {
+    hset := hwp.HParameterSet.HInsertText
+    hwp.HAction.GetDefault("InsertText", hset.HSet)
+    hset.Text := text
+    hwp.HAction.Execute("InsertText", hset.HSet)
+}
+
+InputText_Enter(text) {
+    InputText(text)
+    hwp.HAction.Run("BreakPara")
+}
+
+hwp_LineSpace(&num) {
+    hwp.HAction.GetDefault("ParagraphShape", hwp.HParameterSet.HParaShape.HSet)
+    hwp.HParameterSet.HParaShape.LineSpacing := num
+    hwp.HAction.Execute("ParagraphShape", hwp.HParameterSet.HParaShape.HSet)
+}
+
+Font_Size(fontName, fontSize) {
+    hIns := hwp.HParameterSet.HInsertText
+    hwp.HAction.GetDefault("InsertText", hIns.HSet)
+    hIns.Text := "1"
+    hwp.HAction.Execute("InsertText", hIns.HSet)
+    hwp.HAction.Run("MoveSelLineBegin")
+    hChar := hwp.HParameterSet.HCharShape
+    hwp.HAction.GetDefault("CharShape", hChar.HSet)
+    fontType := hwp.FontType("TTF")
+    hChar.FaceNameHangul := fontName
+    hChar.FontTypeHangul := fontType
+    hChar.FaceNameOther := fontName
+    hChar.FontTypeOther := fontType
+    hChar.FaceNameSymbol := fontName
+    hChar.FontTypeSymbol := fontType
+    hChar.Height := hwp.PointToHwpUnit(fontSize)
+    hwp.HAction.Execute("CharShape", hChar.HSet)
+    hwp.HAction.Run("DeleteBack")
+}
+
+hwp_Save(FileName) {
+    global hwp
+    SaveDir := A_ScriptDir "\"
+    if !DirExist(SaveDir)
+        DirCreate SaveDir
+
+    FileCount := 0
+    loop files, SaveDir "*.hwp"
+        FileCount++
+
+    SplitPath FileName, , , , &PureName
+    CurrentTime := FormatTime(, "yyMMdd_HHmm")
+    BaseFileName := PureName "_" CurrentTime
+    FinalPath := SaveDir BaseFileName ".hwp"
+    if FileExist(FinalPath) {
+        loop 100 {
+            TempPath := SaveDir BaseFileName "_" A_Index ".hwp"
+            if !FileExist(TempPath) {
+                FinalPath := TempPath
+                break
+            }
+        }
+    }
+    pset := hwp.HParameterSet.HFileOpenSave
+    hwp.HAction.GetDefault("FileSaveAs_S", pset.HSet)
+    pset.FileName := FinalPath
+    pset.Format := "HWP"
+    pset.Attributes := 0
+    return hwp.HAction.Execute("FileSaveAs_S", pset.HSet)
+}
+
+Import_Files() {
+    global hwp
+
+    SelectedFile := FileSelect(3, , "HWP파일 선택", "한글 파일 (*.hwp; *.hwpx)")
+    if (SelectedFile = "") {
+        MsgBox "파일을 선택하지 않고 취소했습니다."
+        return
+    }
+
+    hwp := ComObject("HWPFrame.HwpObject") ;일반적
+    hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
+    hwp.XHwpWindows.Item(0).Visible := true
+    hwp.HAction.Run("SelectAll")
+    hwp.HAction.Run("Delete")
+    pset := hwp.HParameterSet.HInsertFile
+    hwp.HAction.GetDefault("InsertFile", pset.HSet)
+    pset.FileName := SelectedFile
+    pset.KeepSection := 0
+    pset.KeepCharshape := 1
+    pset.KeepParashape := 1
+    pset.KeepStyle := 1
+    hwp.HAction.Execute("InsertFile", pset.HSet)
+}
+
+Table_Make(RowX, RowY) {
+    pset := hwp.HParameterSet.HTableCreation
+    hwp.HAction.GetDefault("TableCreate", pset.HSet)
+    pset.Rows := RowX
+    pset.Cols := RowY
+    pset.TableProperties.Width := hwp.PointToHwpUnit(148.0)
+    pset.TableProperties.TreatAsChar := 1
+    hwp.HAction.Execute("TableCreate", pset.HSet)
+    hwp.HAction.Run("TableCellBlock")
+    hwp.HAction.Run("TableCellBlockExtend")
+    hwp.HAction.Run("TableCellBlockExtend")
+    cset := hwp.HParameterSet.HCharShape
+    hwp.HAction.GetDefault("CharShape", cset.HSet)
+    cset.FaceNameHangul := "맑은 고딕"
+    cset.FontTypeHangul := hwp.FontType("TTF")
+    cset.Height := hwp.PointToHwpUnit(13.0)
+    hwp.HAction.Execute("CharShape", cset.HSet)
+    bset := hwp.HParameterSet.HCellBorderFill
+    hwp.HAction.GetDefault("CellBorder", bset.HSet)
+    lw012 := hwp.HwpLineWidth("0.12mm")
+    bset.BorderWidthTop := bset.BorderWidthBottom := bset.BorderWidthLeft := bset.BorderWidthRight := lw012
+    hwp.HAction.Execute("CellBorder", bset.HSet)
+
+    hwp.HAction.GetDefault("CellBorder", bset.HSet)
+    lw03 := hwp.HwpLineWidth("0.3mm")
+    bset.BorderWidthTop := bset.BorderWidthBottom := bset.BorderWidthLeft := bset.BorderWidthRight := lw03
+    hwp.HAction.Execute("CellBorder", bset.HSet)
+
+    hwp.HAction.Run("Cancel")
+    hwp.HAction.Run("TableColBegin")
+    hwp.HAction.Run("TableColPageUp")
+    hwp.HAction.Run("TableCellBlock")
+    hwp.HAction.Run("TableCellBlockRow")
+    hwp.HAction.Run("ParagraphShapeAlignCenter")
+
+    hwp.HAction.Run("TableCellBlockRow")
+    hwp.HAction.Run("TableCellBlockCol")
+    hwp.HAction.Run("TableResizeExDown")
+    hwp.HAction.Run("TableResizeExDown")
+    hwp.HAction.Run("TableColPageUp")
+    hwp.HAction.Run("TableColBegin")
+    hwp.HAction.Run("Cancel")
+    WinActivate "ahk_exe hwp.exe"
+}
+
+Import_HWP_A3(fileName) {
+    hSec := hwp.HParameterSet.HSecDef
+    hwp.HAction.GetDefault("PageSetup", hSec.HSet)
+    page := hSec.PageDef
+    page.PaperWidth := hwp.MiliToHwpUnit(297.0)
+    page.PaperHeight := hwp.MiliToHwpUnit(420.0)
+    page.Landscape := 1
+    page.TopMargin := hwp.MiliToHwpUnit(20.0)
+    page.BottomMargin := hwp.MiliToHwpUnit(5.0)
+    page.HeaderLen := hwp.MiliToHwpUnit(5.0)
+    page.FooterLen := hwp.MiliToHwpUnit(15.0)
+    hSec.HSet.SetItem("ApplyClass", 24)
+    hSec.HSet.SetItem("ApplyTo", 3)
+    hwp.HAction.Execute("PageSetup", hSec.HSet)
+
+    hCol := hwp.HParameterSet.HColDef
+    hwp.HAction.GetDefault("MultiColumn", hCol.HSet)
+    hCol.Count := 2
+    hCol.SameGap := hwp.MiliToHwpUnit(40.0)
+    hCol.HSet.SetItem("ApplyClass", 832)
+    hCol.HSet.SetItem("ApplyTo", 6)
+    hwp.HAction.Execute("MultiColumn", hCol.HSet)
+
+    fullPath := A_ScriptDir "\DATA\" fileName
+    hIns := hwp.HParameterSet.HInsertFile
+    hwp.HAction.GetDefault("InsertFile", hIns.HSet)
+    hIns.FileName := fullPath
+    hIns.KeepSection := 0
+    hIns.KeepCharshape := 1
+    hIns.KeepParashape := 1
+    hIns.KeepStyle := 0
+    hwp.HAction.Execute("InsertFile", hIns.HSet)
+}
+
+New_Document(*) {
+    global hwp ; ###
+    hwp := ComObject("HWPFrame.HwpObject")
+
+    hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
+    hwp.XHwpWindows.Item(0).Visible := true
+    Paper_Setting_A4()
+}
+
+Paper_Setting_A4(*) {
+    hwp.XHwpWindows.Item(0).Visible := false
+    pset := hwp.HParameterSet.HSecDef
+    pset1 := hwp.HParameterSet.HColDef
+    hwp.HAction.GetDefault("PageSetup", pset.HSet)
+    pset.PageDef.PaperWidth := hwp.MiliToHwpUnit(210.0)
+    pset.PageDef.PaperHeight := hwp.MiliToHwpUnit(297.0)
+    pset.PageDef.LeftMargin := hwp.MiliToHwpUnit(20.0)
+    pset.PageDef.RightMargin := hwp.MiliToHwpUnit(20.0)
+    pset.PageDef.TopMargin := hwp.MiliToHwpUnit(15.0)
+    pset.PageDef.BottomMargin := hwp.MiliToHwpUnit(10.0)
+    pset.PageDef.HeaderLen := hwp.MiliToHwpUnit(10.0)
+    pset.PageDef.FooterLen := hwp.MiliToHwpUnit(10.0)
+    pset.PageDef.Landscape := 0
+    pset.HSet.SetItem("ApplyClass", 24)
+    pset.HSet.SetItem("ApplyTo", 3)
+    hwp.HAction.Execute("PageSetup", pset.HSet)
+
+    hwp.HAction.GetDefault("MultiColumn", pset1.HSet)
+    pset1.Count := 1
+    pset1.HSet.SetItem("ApplyClass", 832)
+    pset1.HSet.SetItem("ApplyTo", 6)
+    hwp.HAction.Execute("MultiColumn", pset1.HSet)
+    hwp.XHwpWindows.Item(0).Visible := true
+}
+
+HWP_Sample(*) {
+    pset := hwp.HParameterSet.HParaShape
+    hwp.HAction.GetDefault("ParagraphShape", pset.HSet)
+    pset.LineSpacing := 175
+    hwp.HAction.Execute("ParagraphShape", pset.HSet)
+
+    hwp.HAction.Run("CharShapeBold")
+    hwp.HAction.Run("ParagraphShapeAlignCenter")
+    Font_Size("휴먼명조", 23)
+    InputText_Enter("한글 자동화 테스트입니다.")
+
+    Font_Size("휴먼명조", 17)
+    hwp.HAction.Run("ParagraphShapeAlignLeft")
+    InputText_Enter("□ 소제목을 입력하세요")
+
+    hwp.HAction.Run("CharShapeBold")
+    Font_Size("휴먼명조", 15)
+    InputText_Enter(" ○ 본문 내용을 입력하세요.")
+    InputText_Enter("  - 부가 내용 1")
+    Font_Size("맑은 고딕", 13)
+    InputText_Enter("   · 부가 내용 2")
+    Font_Size("휴먼명조", 15)
+
+    Table_Make(3, 5)
+    Arr := ["연번", "일자", "내용", "부서", "비고", "1", "1201", "00", "0과"]
+    hwp.HAction.Run("TableColPageUp")
+    hwp.HAction.Run("TableColBegin")
+    loop Arr.Length {
+        InputText(Arr[A_Index])
+        hwp.HAction.Run("TableRightCell")
+    }
+    hwp.HAction.Run("Cancel")
+    hwp.HAction.Run("CloseEx")
+    hwp.HAction.Run("MoveDown")
+    ;~ hwp_Enter(1)
+    Font_Size("맑은 고딕", 17)
+    hwp.HAction.Run("CharShapeBold")
+    InputText_Enter("■ AutoHotKey 프로그램으로 HWP 자동화 샘플입니다.")
+    hwp.HAction.Run("CharShapeBold")
+    Font_Size("휴먼명조", 15)
+    InputText_Enter("ㅇ 새문서 버튼으로 실행한 HWP에서만 기능 사용 가능")
+    InputText_Enter("ㅇ 기호 ↔ 기본 Toggle키 / Ctrl+F10의 일부 특수문자만...")
+    InputText_Enter("ㅇ 상단 메뉴 중 '각종서식' 에서 원하는 서식을 선택하면 예시 자료를 가져오며,  편집을 쉽게 할 수 있습니다.")
+    hwp_Enter(1)
+
+    InputText_Enter(
+        "★ HotStrings 편리(예 ::>>::→) : '>>' → '→', (::aaa::□) 'aaa' → '□', (::ddd::❍) 'ddd' → 'ㅇ' , (::eee::GJ20@korea.kr) 등 '약어'에 입력할 내용을 정의하여 활용"
+    )
+    hwp_Enter(1)
+    InputText_Enter("◆ HWP열기 → 기존의 한글파일을 편집할 때, 현재 문서가 아닌 별도 파일로 새로 열립니다")
+    InputText_Enter("※ 사용된 AHK 코드는 HWP의 스크립트 메크로와 ChatGPT 등 활용")
+    hwp_Enter(1)
+    Font_Size("맑은 고딕", 16)
+    InputText_Enter("주의 사항 : HWP Helper 통해 열린 최신 HWP 파일에서만 작동되며, 다른 한글파일은 메뉴의 각종서식 → HWP열기 활용")
+    pset := hwp.HParameterSet.HCharShape
+    hwp.HAction.GetDefault("CharShape", pset.HSet)
+    pset.TextColor := 0x0000FF
+    hwp.HAction.Execute("CharShape", pset.HSet)
+    hwp_Enter(1)
+    Font_Size("HY헤드라인M", 14)
+    InputText("작업중에 초기화된 내용이 있다면 → 되돌리기 Ctrl+Z")
+}
+
+; HotStrings =========================
+:*:>>::→
+:*:<<::←
+:*:<>::↔
+:*:.x.::※
+:*:aaa::{U+25A1}
+:*:ddd::{U+274D}
+:*:eee::GJ20@korea.kr
+:*:ggg::{U+00B7}
+:*:qa;::Autohotkey V2로 아래한글을 제어하고 있습니다.
+
+; HotKey =========================
+^k:: LEdit()
+^r:: LReload()
